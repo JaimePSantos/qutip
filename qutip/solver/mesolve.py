@@ -147,7 +147,9 @@ def mesolve(
     e_ops = _kwargs_migration(_e_ops, e_ops, "e_ops")
     args = _kwargs_migration(_args, args, "args")
     options = _kwargs_migration(_options, options, "options")
+    
     options = _solver_deprecation(kwargs, options)
+    
     H = QobjEvo(H, args=args, tlist=tlist)
 
     c_ops = c_ops if c_ops is not None else []
@@ -155,16 +157,19 @@ def mesolve(
         c_ops = [c_ops]
     c_ops = [QobjEvo(c_op, args=args, tlist=tlist) for c_op in c_ops]
 
+    print('Determining whether to use mesolve or sesolve')
     use_mesolve = len(c_ops) > 0 or (not rho0.isket) or H.issuper
 
     if not use_mesolve:
+        print('Using sesolve')
         return sesolve(H, rho0, tlist, e_ops=e_ops, args=args,
                        options=options)
 
+    print('Using MESOLVER')
     solver = MESolver(H, c_ops, options=options)
 
+    print('Running solver')
     return solver.run(rho0, tlist, e_ops=e_ops)
-
 
 class MESolver(SESolver):
     """
@@ -219,30 +224,46 @@ class MESolver(SESolver):
         *,
         options: dict = None,
     ):
+        print('Initializing MESolver')
         _time_start = time()
+        print('Time start:', _time_start)
 
         if not isinstance(H, (Qobj, QobjEvo)):
             raise TypeError("The Hamiltonian must be a Qobj or QobjEvo")
+        print('Hamiltonian type check passed')
+
         c_ops = c_ops or []
+        print('c_ops initialized:', len(c_ops))
+
         c_ops = [c_ops] if isinstance(c_ops, (Qobj, QobjEvo)) else c_ops
+        print('c_ops list check:', len(c_ops))
+
         for c_op in c_ops:
             if not isinstance(c_op, (Qobj, QobjEvo)):
                 raise TypeError("All `c_ops` must be a Qobj or QobjEvo")
+        print('c_ops type check passed')
 
         self._num_collapse = len(c_ops)
+        print('Number of collapse operators:', self._num_collapse)
 
         rhs = H if H.issuper else liouvillian(H)
+        print('RHS initialized:', rhs)
+
         rhs += sum(c_op if c_op.issuper else lindblad_dissipator(c_op)
                    for c_op in c_ops)
+        print('RHS after adding collapse operators:', rhs)
 
         Solver.__init__(self, rhs, options=options)
+        print('Solver initialized')
 
     def _initialize_stats(self):
+        print('Initializing stats')
         stats = super()._initialize_stats()
         stats.update({
             "solver": "Master Equation Evolution",
             "num_collapse": self._num_collapse,
         })
+        print('Stats initialized:', stats)
         return stats
 
     @classmethod
@@ -277,6 +298,9 @@ class MESolver(SESolver):
             For density matrices, the matrices can be column stacked or square
             depending on the integration method.
         """
+        print('Initializing StateFeedback')
         if raw_data:
+            print('Returning _DataFeedback')
             return _DataFeedback(default, open=True, prop=prop)
+        print('Returning _QobjFeedback')
         return _QobjFeedback(default, open=True, prop=prop)
